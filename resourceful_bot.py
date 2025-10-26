@@ -1,6 +1,8 @@
 import os
 import json
 import requests
+from flask import Flask
+from threading import Thread
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
@@ -11,6 +13,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 GUMLOOP_WEBHOOK = os.environ.get("GUMLOOP_WEBHOOK_URL")
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
 SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
+PORT = int(os.environ.get("PORT", 10000))
 
 # Channel mapping
 CHANNELS = {
@@ -22,6 +25,19 @@ CHANNELS = {
     "C09PGG5L7AL": "nick-clarity",
     "C09N6NVDWKH": "jordan-clarity"
 }
+
+# ============================================
+# HEALTH CHECK SERVER (for Render)
+# ============================================
+
+flask_app = Flask(__name__)
+
+@flask_app.route('/')
+def health_check():
+    return json.dumps({"status": "healthy", "bot": "running"}), 200
+
+def run_health_server():
+    flask_app.run(host='0.0.0.0', port=PORT)
 
 # ============================================
 # INITIALIZE SLACK APP
@@ -122,5 +138,11 @@ if __name__ == "__main__":
     print(f"📡 Listening to {len(CHANNELS)} channels")
     print(f"🔗 Forwarding to: {GUMLOOP_WEBHOOK[:50] if GUMLOOP_WEBHOOK else 'NOT SET'}...")
     
+    # Start health check server in background thread
+    health_thread = Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    print(f"💚 Health check server on port {PORT}")
+    
+    # Start Slack bot
     handler = SocketModeHandler(app, SLACK_APP_TOKEN)
     handler.start()
